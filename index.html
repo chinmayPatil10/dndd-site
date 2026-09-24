@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNDD — support tickets, investigated before anyone pings an engineer</title>
+<meta name="description" content="DNDD reads your live systems the moment a ticket arrives and posts what actually happened. It runs inside your network. Your data never leaves it.">
+<meta name="color-scheme" content="light dark">
+
+<meta property="og:title" content="DNDD — it investigates your production systems">
+<meta property="og:description" content="Your data never leaves your network.">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --ground:  #F2F4F2;
+  --surface: #FFFFFF;
+  --ink:     #0E1613;
+  --ink-2:   #46544E;
+  --line:    #D5DCD7;
+  --accent:  #0B5D4E;
+  --signal:  #BE4E39;
+  --accent-soft: rgba(11, 93, 78, .08);
+  --shadow: 0 1px 2px rgba(14,22,19,.04), 0 8px 24px -12px rgba(14,22,19,.12);
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:  #0C100E;
+    --surface: #141A17;
+    --ink:     #E8EDEA;
+    --ink-2:   #9DAAA4;
+    --line:    #26302B;
+    --accent:  #5FBFA6;
+    --signal:  #E08A73;
+    --accent-soft: rgba(95, 191, 166, .10);
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 17px/1.65 "Public Sans", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, .num { font-family: Archivo, system-ui, sans-serif; letter-spacing: -.021em; }
+h1 { font-size: clamp(2.1rem, 5.4vw, 3.6rem); line-height: 1.08; font-weight: 700; margin: 0 0 1.1rem; }
+h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); line-height: 1.18; font-weight: 600; margin: 0 0 .85rem; }
+h3 { font-size: 1.05rem; font-weight: 600; margin: 0 0 .35rem; }
+p  { margin: 0 0 1rem; }
+a  { color: var(--accent); }
+
+code, pre, .mono { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+
+.wrap { max-width: 68rem; margin: 0 auto; padding: 0 1.5rem; }
+@media (max-width: 480px) { .wrap { padding: 0 1rem; } }
+
+section { padding: clamp(3.5rem, 8vw, 6.5rem) 0; border-top: 1px solid var(--line); }
+section:first-of-type { border-top: 0; }
+
+.eyebrow {
+  font: 500 .72rem/1 "IBM Plex Mono", monospace;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--accent);
+  display: inline-flex; align-items: center; gap: .5rem; margin-bottom: 1.4rem;
+}
+.eyebrow::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); flex: none;
+}
+.lede { font-size: clamp(1.05rem, 2vw, 1.22rem); color: var(--ink-2); max-width: 44ch; }
+
+/* ---------- nav ---------- */
+nav {
+  position: sticky; top: 0; z-index: 50;
+  background: color-mix(in srgb, var(--ground) 86%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid transparent;
+  transition: border-color .2s;
+}
+nav.stuck { border-bottom-color: var(--line); }
+nav .wrap { display: flex; align-items: center; gap: 1.25rem; height: 58px; }
+.brand { font: 700 1.02rem/1 Archivo, sans-serif; letter-spacing: -.02em; color: var(--ink); text-decoration: none; }
+.brand span { color: var(--accent); }
+nav .links { margin-left: auto; display: flex; gap: 1.4rem; }
+nav .links a { color: var(--ink-2); text-decoration: none; font-size: .88rem; }
+nav .links a:hover { color: var(--ink); }
+@media (max-width: 720px) { nav .links { display: none; } }
+
+/* ---------- hero ---------- */
+.hero { position: relative; padding-top: clamp(3rem, 7vw, 5rem); padding-bottom: clamp(7rem, 22vw, 15rem); }
+#field {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  z-index: 0; pointer-events: none; opacity: 0;
+  transition: opacity 1.6s ease;
+  /* Type first, illustration second: it fades in below the fold content. */
+  -webkit-mask-image: linear-gradient(transparent 34%, #000 74%);
+          mask-image: linear-gradient(transparent 34%, #000 74%);
+}
+#field.ready { opacity: 1; }
+.hero .wrap { position: relative; z-index: 1; }
+.hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: clamp(2rem, 4vw, 3.5rem); align-items: center; }
+@media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
+
+.cta-row { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.9rem; }
+.btn {
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .72rem 1.25rem; border-radius: 7px; text-decoration: none;
+  font-weight: 600; font-size: .95rem; border: 1px solid transparent;
+  transition: transform .12s ease, box-shadow .2s ease;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn-primary { background: var(--accent); color: var(--surface); box-shadow: var(--shadow); }
+@media (prefers-color-scheme: dark) { .btn-primary { color: #08100D; } }
+.btn-ghost { border-color: var(--line); color: var(--ink); background: var(--surface); }
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- the note card ---------- */
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.note { overflow: hidden; }
+.note .bar {
+  display: flex; align-items: center; gap: .6rem; padding: .6rem .9rem;
+  border-bottom: 1px solid var(--line); font-size: .74rem; color: var(--ink-2);
+}
+.note .bar .tag {
+  font: 500 .64rem/1 "IBM Plex Mono", monospace; letter-spacing: .1em; text-transform: uppercase;
+  padding: .22rem .45rem; border: 1px solid var(--line); border-radius: 4px; color: var(--ink-2);
+}
+.note .bar .id { font-family: "IBM Plex Mono", monospace; color: var(--ink); }
+.note .body { padding: .95rem; font-size: .88rem; }
+.note .subject { font-weight: 600; margin-bottom: .55rem; }
+.note .quote { color: var(--ink-2); border-left: 2px solid var(--line); padding-left: .7rem; margin-bottom: .9rem; }
+.note table { width: 100%; border-collapse: collapse; font-family: "IBM Plex Mono", monospace; font-size: .74rem; }
+.note td { padding: .28rem .35rem; border-top: 1px solid var(--line); white-space: nowrap; }
+.note td:last-child { text-align: right; }
+.note .fail { color: var(--signal); }
+.note .facts { margin: .8rem 0 0; font-size: .78rem; color: var(--ink-2); font-family: "IBM Plex Mono", monospace; }
+.note .facts div { padding: .16rem 0; }
+.verdict-line {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--line);
+}
+.pill {
+  font: 600 .74rem/1 "IBM Plex Mono", monospace; padding: .3rem .6rem;
+  border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+}
+.dim { color: var(--ink-2); font-size: .78rem; }
+
+/* ---------- generic layout bits ---------- */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(1.5rem, 3vw, 2.5rem); }
+@media (max-width: 820px) { .two { grid-template-columns: 1fr; } }
+
+.ba { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1.2rem; align-items: stretch; margin-top: 1.8rem; }
+@media (max-width: 820px) { .ba { grid-template-columns: 1fr; } .ba .arrow { transform: rotate(90deg); margin: -.4rem auto; } }
+.ba .panel { padding: 1.2rem; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); }
+.ba .panel h3 { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); font-family: "IBM Plex Mono", monospace; }
+.ba .panel p { margin: .5rem 0 0; font-size: .94rem; }
+.ba .panel.after { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.ba .arrow { align-self: center; color: var(--ink-2); font-size: 1.3rem; }
+
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 2rem 0 0; display: grid; gap: .5rem; }
+ol.steps li {
+  counter-increment: s; display: grid; grid-template-columns: 2.6rem 1fr; gap: 1rem;
+  align-items: start; padding: 1rem; border-radius: var(--radius);
+  border: 1px solid transparent; transition: border-color .2s, background .2s;
+}
+ol.steps li:hover { border-color: var(--line); background: var(--surface); }
+ol.steps li::before {
+  content: counter(s, decimal-leading-zero);
+  font: 600 .84rem/2.6rem "IBM Plex Mono", monospace; color: var(--accent);
+  text-align: center; background: var(--accent-soft); border-radius: 7px; height: 2.6rem;
+}
+ol.steps p { margin: .2rem 0 0; color: var(--ink-2); font-size: .95rem; }
+
+pre.yaml {
+  margin: 1.5rem 0 0; padding: 1.15rem; overflow-x: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  font-size: .8rem; line-height: 1.7; box-shadow: var(--shadow);
+}
+pre.yaml .k { color: var(--accent); }
+pre.yaml .c { color: var(--ink-2); font-style: italic; }
+pre.yaml .s { color: var(--signal); }
+
+.verdicts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 2rem; }
+@media (max-width: 820px) { .verdicts { grid-template-columns: 1fr; } }
+.verdicts .v { padding: 1.3rem; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); }
+.verdicts .v .k { font: 600 .74rem/1 "IBM Plex Mono", monospace; letter-spacing: .06em; }
+.verdicts .v h3 { margin: .7rem 0 .3rem; }
+.verdicts .v p { margin: 0; color: var(--ink-2); font-size: .93rem; }
+.v-theirs .k { color: var(--accent); }
+.v-ours .k { color: var(--signal); }
+.v-third .k { color: var(--ink-2); }
+
+ul.checks { list-style: none; padding: 0; margin: 2rem 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: .1rem 2rem; }
+@media (max-width: 820px) { ul.checks { grid-template-columns: 1fr; } }
+ul.checks li {
+  display: grid; grid-template-columns: 1.3rem 1fr; gap: .6rem;
+  padding: .72rem 0; border-bottom: 1px solid var(--line); font-size: .95rem;
+}
+ul.checks li::before { content: "✓"; color: var(--accent); font-weight: 600; }
+ul.checks b { font-weight: 600; }
+
+.offer { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: clamp(1.5rem, 4vw, 2.5rem); box-shadow: var(--shadow); }
+.offer .big { font: 700 clamp(2.4rem, 7vw, 4rem)/1 Archivo, sans-serif; color: var(--accent); letter-spacing: -.03em; }
+
+footer { border-top: 1px solid var(--line); padding: 3rem 0 4rem; color: var(--ink-2); font-size: .92rem; }
+footer .row { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: baseline; }
+footer .mail { font-family: "IBM Plex Mono", monospace; color: var(--ink); user-select: all; }
+
+.reveal { opacity: 0; transform: translateY(14px); transition: opacity .7s ease, transform .7s ease; }
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .btn:hover { transform: none; }
+}
+</style>
+</head>
+<body>
+
+<nav id="nav"><div class="wrap">
+  <a class="brand" href="#top">DN<span>DD</span></a>
+  <div class="links">
+    <a href="#cost">The problem</a>
+    <a href="#how">How it works</a>
+    <a href="#sql">No generated SQL</a>
+    <a href="#security">Security</a>
+  </div>
+</div></nav>
+
+<main id="top">
+
+<!-- 1 ─ hero -->
+<section class="hero">
+  <canvas id="field" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow">Runs inside your network</span>
+        <h1>It investigates your production systems. Your&nbsp;data never leaves your network.</h1>
+        <p class="lede">
+          DNDD reads your live systems the moment a ticket arrives and posts what
+          actually happened — before anyone pings an engineer.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="mailto:hello@dndd.dev?subject=DNDD%20pilot">Book a pilot</a>
+          <a class="btn btn-ghost" href="#security">Read the security brief</a>
+        </div>
+      </div>
+
+      <div class="card note reveal">
+        <div class="bar">
+          <span class="tag">Example</span>
+          <span class="id">SUP-24187</span>
+          <span style="margin-left:auto">posted to your review queue</span>
+        </div>
+        <div class="body">
+          <div class="subject">Payment keeps failing</div>
+          <div class="quote">
+            “We tried to pay our invoice twice this morning and it was rejected both
+            times. Nothing has changed on our side.”
+          </div>
+
+          <table>
+            <tr><td>#119</td><td>16:59 UTC</td><td class="fail">declined</td><td class="fail">51</td><td>USD&nbsp;99.11</td></tr>
+            <tr><td>#118</td><td>14:59 UTC</td><td class="fail">declined</td><td class="fail">51</td><td>USD&nbsp;99.11</td></tr>
+            <tr><td>#117</td><td>Sep&nbsp;14</td><td>succeeded</td><td>00</td><td>USD&nbsp;95.39</td></tr>
+          </table>
+
+          <div class="facts">
+            <div>gateway code 51 · insufficient funds</div>
+            <div>txn ref ch_3PxK9aL2mQ · card ••4417</div>
+            <div>0 errors of ours in the window · no provider incident</div>
+          </div>
+
+          <div class="verdict-line">
+            <span class="pill">Not a bug on our side</span>
+            <span class="dim">confidence high</span>
+            <span class="dim" style="margin-left:auto">6 queries run →</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 ─ the double cost -->
+<section id="cost"><div class="wrap reveal">
+  <span class="eyebrow">The problem</span>
+  <h2>An escalation costs you twice</h2>
+  <p class="lede">
+    Support cannot answer, so the ticket waits. An engineer picks it up, loses an
+    afternoon to context they do not have, and finds a boring answer. Both
+    people paid, and the customer waited for both.
+  </p>
+
+  <div class="ba">
+    <div class="panel">
+      <h3>Today</h3>
+      <p>
+        Agent reads the ticket. Cannot query the billing database. Escalates.
+        The ticket sits for a day and a half. An engineer runs four queries,
+        finds the card was declined by the issuer, and writes two sentences back.
+      </p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="panel after">
+      <h3>With DNDD</h3>
+      <p>
+        The agent opens the ticket and the answer is already attached, with the
+        evidence it came from. They reply in thirty seconds. Nobody was
+        interrupted. The engineer never found out it happened.
+      </p>
+    </div>
+  </div>
+</div></section>
+
+<!-- 3 ─ how it works -->
+<section id="how"><div class="wrap reveal">
+  <span class="eyebrow">How it works</span>
+  <h2>Five steps, every time, in about a second</h2>
+  <ol class="steps">
+    <li><div><h3>Read the ticket</h3><p>Work out what it is about and who it is from. The account comes from the address it arrived on — never from the body, which anyone can write.</p></div></li>
+    <li><div><h3>Pick a playbook</h3><p>A playbook is an investigation you have described once: which systems to look at, in what order, and what each answer means.</p></div></li>
+    <li><div><h3>Query your live systems, read-only</h3><p>Through a database role you create and can inspect, scoped to that one customer, row-limited, timed out, and logged.</p></div></li>
+    <li><div><h3>Decide whose problem it is</h3><p>Ours, theirs, a third party's — or, when the evidence does not support an answer, that it does not know.</p></div></li>
+    <li><div><h3>Post the answer</h3><p>To your private review queue, with every query it ran attached. Your support lead marks it right or wrong. That is how the playbooks get better.</p></div></li>
+  </ol>
+</div></section>
+
+<!-- 4 ─ no generated SQL -->
+<section id="sql"><div class="wrap reveal">
+  <span class="eyebrow">The part that matters</span>
+  <h2>No generated SQL, ever</h2>
+  <div class="two" style="margin-top:.6rem">
+    <div>
+      <p class="lede">
+        The obvious way to build this is to hand a language model your schema and
+        let it write queries. It demos well. It is also a query nobody reviewed,
+        against production data, on behalf of a ticket someone else wrote.
+      </p>
+      <p style="color:var(--ink-2)">
+        DNDD never does that. A playbook is structured data — a table, filters,
+        columns, an order — which the engine assembles into a parameterised
+        query. Table and column names are checked against your real schema when
+        the service starts, so a playbook naming a column you do not have fails
+        on startup rather than during someone's ticket.
+      </p>
+      <p style="color:var(--ink-2)">
+        Every read a playbook can perform is therefore knowable before it runs.
+        That is what makes the list further down a set of facts rather than
+        assurances.
+      </p>
+    </div>
+    <div>
+<pre class="yaml"><span class="c"># a real step from a real playbook</span>
+<span class="k">- id:</span> attempts
+  <span class="k">shape:</span> rows
+  <span class="k">table:</span> payment_attempts
+  <span class="k">where:</span>
+    <span class="k">created_at:</span> { <span class="k">gte:</span> $window.start }
+  <span class="k">select:</span> [id, status, gateway_code, amount]
+  <span class="k">order:</span> [-created_at]
+  <span class="k">limit:</span> <span class="s">20</span>
+
+<span class="c"># it names no account. this is what runs:</span>
+<span class="c">#   WHERE created_at &gt;= :p1</span>
+<span class="c">#     AND account_id = :subject_id  ← added by us,</span>
+<span class="c">#         from your config, not the playbook</span></pre>
+    </div>
+  </div>
+</div></section>
+
+<!-- 5 ─ three verdicts -->
+<section id="verdicts"><div class="wrap reveal">
+  <span class="eyebrow">What it concludes</span>
+  <h2>Three verdicts, and the honesty to give none</h2>
+  <p class="lede">Every investigation ends in one of these, with the evidence that got it there.</p>
+  <div class="verdicts">
+    <div class="v v-theirs"><div class="k">NOT OUR BUG</div><h3>Theirs</h3><p>The issuer declined it. The request reached them and came back refused. Your support agent can say so, with the code and the timestamp.</p></div>
+    <div class="v v-ours"><div class="k">OURS, ESCALATED</div><h3>Ours</h3><p>Something in your systems failed, and here are the error-tracker events from the same minute. This one should reach an engineer — and now it arrives with its evidence.</p></div>
+    <div class="v v-third"><div class="k">THIRD PARTY</div><h3>Somebody else's</h3><p>Your payment processor was having an incident at the time. Nobody needs to debug it; the answer is to retry.</p></div>
+  </div>
+  <p style="margin-top:1.6rem;color:var(--ink-2)">
+    And when the evidence does not support any of them, it says
+    <b style="color:var(--ink)">it does not know</b> and asks for a human. That is
+    a feature with a cost we chose on purpose: a system that always has an answer
+    is a system that is sometimes confidently wrong, and one confidently wrong
+    answer costs more trust than ten honest shrugs.
+  </p>
+</div></section>
+
+<!-- 6 ─ security -->
+<section id="security"><div class="wrap reveal">
+  <span class="eyebrow">Security brief</span>
+  <h2>Nothing leaves your network</h2>
+  <p class="lede">The answer sheet, so your platform team can check it rather than take our word.</p>
+  <ul class="checks">
+    <li><span><b>One Helm chart.</b> It runs in your cluster, beside the systems it reads.</span></li>
+    <li><span><b>No inbound connections.</b> We cannot reach it. Neither can anyone else.</span></li>
+    <li><span><b>Your model key, or a local model.</b> Billed to you, under your agreement with the provider. Nothing routes through us.</span></li>
+    <li><span><b>A read-only database user.</b> You create it, and the exact grants are published. It is refused if it tries to write.</span></li>
+    <li><span><b>Every query audited</b> against the ticket that caused it — connector, parameters, rows returned, milliseconds.</span></li>
+    <li><span><b>An egress allowlist of three hosts.</b> Nothing else is reachable outbound.</span></li>
+    <li><span><b>SSO on the console.</b> One way in, through the identity provider you already run.</span></li>
+    <li><span><b>Telemetry is opt-in and content-free.</b> Counts and timings. Never a ticket, never a note.</span></li>
+  </ul>
+  <p style="margin-top:1.8rem;color:var(--ink-2)">
+    And the one that usually ends the conversation early:
+    <b style="color:var(--ink)">DNDD never writes to your ticket system.</b>
+    It posts to its own review queue, which only your team can see. Writing back
+    is not a setting we left switched off — it is not implemented.
+  </p>
+</div></section>
+
+<!-- 7 ─ one number -->
+<section id="pilot"><div class="wrap reveal">
+  <div class="offer">
+    <span class="eyebrow">The only number that matters</span>
+    <h2 style="margin-bottom:1.2rem">Your escalation rate</h2>
+    <div class="two" style="align-items:center">
+      <div>
+        <p style="color:var(--ink-2);margin-bottom:0">
+          Not tickets deflected, not hours saved, not a percentage we made up
+          about a company we have never seen. The share of support tickets that
+          end up on an engineer's desk — a number you already have, that you can
+          measure before and after without us.
+        </p>
+      </div>
+      <div>
+        <div class="big">30 days</div>
+        <p style="margin-top:.5rem">
+          Run it in shadow mode for a month. If your escalation rate has not
+          fallen, don't pay.
+        </p>
+        <div class="cta-row" style="margin-top:1.2rem">
+          <a class="btn btn-primary" href="mailto:hello@dndd.dev?subject=DNDD%20pilot">Book a pilot</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+</main>
+
+<footer><div class="wrap">
+  <div class="row">
+    <div>
+      <div style="font-family:Archivo;font-weight:700;color:var(--ink);font-size:1rem">DNDD</div>
+      <div style="margin-top:.2rem">Support tickets, investigated before anyone pings an engineer.</div>
+    </div>
+    <div style="margin-left:auto">
+      <div>Talk to us — <span class="mail">hello@dndd.dev</span></div>
+      <div style="margin-top:.2rem;font-size:.84rem">Self-hosted. Shadow mode. No inbound connections.</div>
+    </div>
+  </div>
+</div></footer>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+// Scroll reveal and the sticky-nav hairline. No library, no dependency.
+const io = new IntersectionObserver((es) => {
+  for (const e of es) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+}, { rootMargin: "0px 0px -8% 0px" });
+document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+
+const nav = document.getElementById("nav");
+addEventListener("scroll", () => nav.classList.toggle("stuck", scrollY > 8), { passive: true });
+
+// ---------------------------------------------------------------------------
+// The hero field.
+//
+// It is the claim, drawn: a boundary, your systems inside it, a ticket arriving
+// from outside and crossing in — and nothing ever crossing back out. Slow and
+// quiet on purpose. A trust story is not helped by a light show.
+//
+// Everything below is optional. No WebGL, reduced motion, or a slow CDN and the
+// page is exactly as readable.
+// ---------------------------------------------------------------------------
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const canvas = document.getElementById("field");
+
+if (!reduced && canvas) {
+  try {
+    const THREE = await import("three");
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    const INK    = new THREE.Color(dark ? 0x3A4B44 : 0xC3CFC8);
+    const ACCENT = new THREE.Color(dark ? 0x5FBFA6 : 0x0B5D4E);
+    const SIGNAL = new THREE.Color(dark ? 0xE08A73 : 0xBE4E39);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+    camera.position.set(0, 0.6, 9);
+
+    const world = new THREE.Group();
+    // Sits to the right of the headline, not behind it.
+    world.position.set(1.6, -4.3, -1.0);
+    scene.add(world);
+
+    // The boundary: a sphere of points. Porous enough to read as a perimeter
+    // rather than a wall, because it is a network edge and not a vault.
+    const N = 1400, R = 3.5;
+    const pos = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      const y = 1 - (i / (N - 1)) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const t = i * Math.PI * (3 - Math.sqrt(5));           // golden-angle spiral
+      pos.set([Math.cos(t) * r * R, y * R, Math.sin(t) * r * R], i * 3);
+    }
+    const shell = new THREE.Points(
+      new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(pos, 3)),
+      new THREE.PointsMaterial({ size: 0.03, color: INK, transparent: true, opacity: 0.8 })
+    );
+    world.add(shell);
+
+    // Your systems, inside it.
+    const nodes = [[-1.5, 0.7, 0.4], [1.4, 0.9, -0.5], [0.2, -1.2, 0.8], [1.1, -0.4, 1.2], [-0.9, -0.6, -1.1]]
+      .map((p) => new THREE.Vector3(...p));
+
+    const nodeGeo = new THREE.SphereGeometry(0.075, 16, 16);
+    const nodeMat = new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.75 });
+    for (const n of nodes) {
+      const m = new THREE.Mesh(nodeGeo, nodeMat);
+      m.position.copy(n);
+      world.add(m);
+    }
+
+    const links = [[0,1],[0,2],[1,3],[2,3],[2,4],[0,4]];
+    const linkPts = [];
+    for (const [a, b] of links) linkPts.push(nodes[a], nodes[b]);
+    world.add(new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(linkPts),
+      new THREE.LineBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.22 })
+    ));
+
+    // Reads travelling between them — the investigation, happening inside.
+    const pulseGeo = new THREE.SphereGeometry(0.045, 12, 12);
+    const pulseMat = new THREE.MeshBasicMaterial({ color: ACCENT });
+    const pulses = links.map((l, i) => {
+      const m = new THREE.Mesh(pulseGeo, pulseMat);
+      world.add(m);
+      return { mesh: m, link: l, t: i / links.length, speed: 0.22 + (i % 3) * 0.07 };
+    });
+
+    // The ticket: in from outside, across the boundary, and it stays.
+    const ticket = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 16),
+      new THREE.MeshBasicMaterial({ color: SIGNAL }));
+    world.add(ticket);
+    const from = new THREE.Vector3(-9.5, 4.2, 2.5);
+    let tt = 0;
+
+    const clock = new THREE.Clock();
+    let pointer = { x: 0, y: 0 };
+    addEventListener("pointermove", (e) => {
+      pointer.x = (e.clientX / innerWidth - 0.5) * 2;
+      pointer.y = (e.clientY / innerHeight - 0.5) * 2;
+    }, { passive: true });
+
+    function size() {
+      const r = canvas.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      renderer.setSize(r.width, r.height, false);
+      camera.aspect = r.width / r.height;
+      camera.fov = r.width < 700 ? 52 : 40;
+      camera.updateProjectionMatrix();
+    }
+    size();
+    addEventListener("resize", size, { passive: true });
+
+    renderer.setAnimationLoop(() => {
+      const d = Math.min(clock.getDelta(), 0.05);
+
+      world.rotation.y += d * 0.045;
+      world.rotation.x = Math.sin(clock.elapsedTime * 0.12) * 0.06;
+      camera.position.x += (pointer.x * 0.5 - camera.position.x) * 0.02;
+      camera.position.y += (0.6 - pointer.y * 0.3 - camera.position.y) * 0.02;
+      camera.lookAt(1.6, -3.2, 0);
+
+      for (const p of pulses) {
+        p.t = (p.t + d * p.speed) % 1;
+        p.mesh.position.lerpVectors(nodes[p.link[0]], nodes[p.link[1]], p.t);
+        p.mesh.scale.setScalar(0.6 + Math.sin(p.t * Math.PI) * 0.8);
+      }
+
+      // 0 → 1 arrive, then hold inside. It never travels back out.
+      tt = (tt + d * 0.075) % 1;
+      const k = Math.min(1, tt / 0.45);
+      ticket.position.lerpVectors(from, nodes[0], k * k * (3 - 2 * k));
+      ticket.scale.setScalar(tt > 0.45 ? Math.max(0, 1 - (tt - 0.45) * 2.2) : 1);
+
+      renderer.render(scene, camera);
+    });
+
+    canvas.classList.add("ready");
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) renderer.setAnimationLoop(null);
+    });
+  } catch {
+    // No WebGL, no module, no network. The page does not care.
+  }
+}
+</script>
+</body>
+</html>
