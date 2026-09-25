@@ -409,14 +409,14 @@ footer .mail { font-family: "IBM Plex Mono", monospace; color: var(--ink); user-
   <h2>Nothing leaves your network</h2>
   <p class="lede">The answer sheet, so your platform team can check it rather than take our word.</p>
   <ul class="checks">
-    <li><span><b>One Helm chart.</b> It runs in your cluster, beside the systems it reads.</span></li>
-    <li><span><b>No inbound connections.</b> We cannot reach it. Neither can anyone else.</span></li>
-    <li><span><b>Your model key, or a local model.</b> Billed to you, under your agreement with the provider. Nothing routes through us.</span></li>
-    <li><span><b>A read-only database user.</b> You create it, and the exact grants are published. It is refused if it tries to write.</span></li>
+    <li><span><b>One container and a Postgres database.</b> It runs in your cluster, beside the systems it reads.</span></li>
+    <li><span><b>Nothing connects in from us.</b> Your ticket system posts to it inside your network, signed. We have no route to it at all.</span></li>
+    <li><span><b>Your own model key.</b> Billed to you, under your agreement with the provider. Nothing routes through us, and we never see a request or a response.</span></li>
+    <li><span><b>A read-only database user.</b> You create it, and the exact grants are published. It is refused if it tries to write — and it checks, on startup, by trying.</span></li>
     <li><span><b>Every query audited</b> against the ticket that caused it — connector, parameters, rows returned, milliseconds.</span></li>
-    <li><span><b>An egress allowlist of three hosts.</b> Nothing else is reachable outbound.</span></li>
-    <li><span><b>SSO on the console.</b> One way in, through the identity provider you already run.</span></li>
-    <li><span><b>Telemetry is opt-in and content-free.</b> Counts and timings. Never a ticket, never a note.</span></li>
+    <li><span><b>Three outbound hosts, and that is the whole list.</b> So your egress rules can be exact rather than generous.</span></li>
+    <li><span><b>One token on the console.</b> No accounts to provision and no directory to sync. It sits on your network, behind whatever already guards it.</span></li>
+    <li><span><b>No telemetry.</b> None is collected. If that ever changes it will be opt-in, content-free, and every field listed here.</span></li>
   </ul>
   <p style="margin-top:1.8rem;color:var(--ink-2)">
     And the one that usually ends the conversation early:
@@ -464,7 +464,7 @@ footer .mail { font-family: "IBM Plex Mono", monospace; color: var(--ink); user-
     </div>
     <div style="margin-left:auto">
       <div>Talk to us — <span class="mail">hello@dndd.dev</span></div>
-      <div style="margin-top:.2rem;font-size:.84rem">Self-hosted. Shadow mode. No inbound connections.</div>
+      <div style="margin-top:.2rem;font-size:.84rem">Self-hosted. Shadow mode. Nothing connects in from us.</div>
     </div>
   </div>
 </div></footer>
